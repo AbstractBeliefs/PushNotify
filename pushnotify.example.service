@@ -1,0 +1,7 @@
+[Unit]
+Description=PushNotify Pushbullet Daemon
+
+[Service]
+# Hack until systemd 219 maybe?
+Environment=DISPLAY=:0.0 
+ExecStart=/usr/bin/python /path/to/your/pushnotify.py
