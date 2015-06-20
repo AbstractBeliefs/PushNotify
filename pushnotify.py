@@ -9,6 +9,20 @@ import config
 logging.basicConfig(level=config.loglevel)
 logger = logging.getLogger(__file__)
 
+def ephemeral(response):
+    if response["push"]["type"] == "mirror":
+        notification_iface.Notify(
+            "pushnotify",       # DBus Application Name
+            0,                  # Notification-replaces
+            "",                 # Icon
+            response["push"]["application_name"] + " - " + response["push"]["title"],
+            response["push"]["body"],   # Body
+            [],                 # Actions
+            [],                 # Hints
+            -1                  # Timeout
+        )
+    logger.info("Notified: %s - %s" %(response["push"]["application_name"], response["push"]["title"]))
+
 logger.debug("Connecting to DBus")
 bus = dbus.SessionBus()
 notification_object = bus.get_object(
@@ -19,6 +33,7 @@ notification_iface = dbus.Interface(notification_object, "org.freedesktop.Notifi
 
 logger.debug("Connecting to websocket")
 ws = websocket.create_connection("wss://stream.pushbullet.com/websocket/%s" %(config.token))
+
 
 logger.debug("Beginning main loop")
 while True:
@@ -35,18 +50,7 @@ while True:
 
         elif response["type"] == "push":
             logger.info("Received an ephemeral")
-            if response["push"]["type"] == "mirror":
-                notification_iface.Notify(
-                    "pushnotify",       # DBus Application Name
-                    0,                  # Notification-replaces
-                    "",                 # Icon
-                    response["push"]["application_name"] + " - " + response["push"]["title"],
-                    response["push"]["body"],   # Body
-                    [],                 # Actions
-                    [],                 # Hints
-                    -1                  # Timeout
-                )
-                logger.info("Notified: %s - %s" %(response["push"]["application_name"], response["push"]["title"]))
+            ephemeral(response)
             continue
 
         else:
@@ -56,6 +60,14 @@ while True:
     except KeyboardInterrupt:
         logger.debug("Caught KeyboardInterrupt, closing")
         break
+
+    except websocket.WebSocketException:
+        logger.warning("Socket exception, trying to reopen")
+        try:
+            ws = websocket.create_connection("wss://stream.pushbullet.com/websocket/%s" %(config.token))
+        except Exception as e:
+            logger.exception("Couldn't fix the socket, exiting: %s" %(str(e)))
+            break
 
     except Exception as e:
         logger.exception("Caught unhandled exception: %s" %(str(e)))
